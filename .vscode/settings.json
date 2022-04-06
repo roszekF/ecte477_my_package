@@ -6,5 +6,6 @@
     "python.analysis.extraPaths": [
         "/home/secte/catkin_ws/devel/lib/python2.7/dist-packages",
         "/opt/ros/kinetic/lib/python2.7/dist-packages"
-    ]
+    ],
+    "cmake.configureOnOpen": false
 }
