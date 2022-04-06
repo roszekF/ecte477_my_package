@@ -1,0 +1,5 @@
+<!-- launch the move_tb3_circle.py node -->
+<launch>
+    <node pkg="filip_package" type="move_tb3_circle.py" name="tb3_circle" output="screen">
+    </node>
+</launch>
