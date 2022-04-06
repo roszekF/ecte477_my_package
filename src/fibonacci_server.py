@@ -22,7 +22,7 @@ class fibonacci_server:
         rospy.loginfo('[{}] Executing, creating fibonacci sequence of order {} with seeds {}, {}'.format(self.name, goal.order, self.feedback.sequence[0], self.feedback.sequence[1]))
 
         for i in range(1, goal.order):
-            if self.action_server.is_preempt_requested() or rospy.is_shutdown()
+            if self.action_server.is_preempt_requested() or rospy.is_shutdown():
                 rospy.loginfo('[{}] Preempted'.format(self.name))
                 success = False
                 self.action_server.set_preempted()
