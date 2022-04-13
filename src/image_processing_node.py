@@ -12,7 +12,8 @@ class image_processing_node:
         self.colour_frame = None
         self.num_colour_images = 0
 
-        self.subscriber_colour = rospy.Subscriber('/camera/rgb/image_raw/compressed', CompressedImage, self.callback_colour)
+        # use normal topic and 'Image' data type instead of compressed
+        self.subscriber_colour = rospy.Subscriber('/camera/rgb/image_raw', Image, self.callback_colour)
 
         r = rospy.Rate(10)
         while not rospy.is_shutdown():
@@ -21,15 +22,16 @@ class image_processing_node:
 
     def callback_colour(self, colour_image):
         rospy.loginfo('[Image Processing] callback_colour')
-        np_array = np.fromstring(colour_image.data, np.uint8)
-        # try:
-        #     cv_image = self.bridge.imgmsg_to_cv2(colour_image, "bgr8")
-        # except CvBridgeError as e:
-        #     print(e)
+        # from the lab:
+        # np_array = np.fromstring(colour_image.data, np.uint8)
+        try:
+            cv_image = self.bridge.imgmsg_to_cv2(colour_image, "bgr8")
+        except CvBridgeError as e:
+            print(e)
             
-        
-        self.colour_frame = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
-        # self.colour_frame = cv_image
+        # from the lab:
+        # self.colour_frame = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
+        self.colour_frame = cv_image
 
     def loop(self):
         if self.colour_frame != None:
