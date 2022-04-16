@@ -5,7 +5,7 @@ from geometry_msgs.msg import Point
 
 class subscriber_node:
     def __init__(self):
-        self. sub = rospy.Subscriber('robot_location', Point, self.callback)
+        self.sub = rospy.Subscriber('robot_location', Point, self.callback)
         rospy.spin()
 
     def callback(self, location):
