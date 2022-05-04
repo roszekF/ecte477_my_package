@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 
+# import debugpy
+
+# debugpy.listen(5678)
+# debugpy.wait_for_client()
+
 import rospy
 import cv2
 import imutils
@@ -16,6 +21,13 @@ class image_processing_node:
         self.num_colour_images = 0
         self.num_depth_images = 0
 
+        self.ranges = [
+            [(119, 241, 92), (122, 255, 245), 'blue'],
+            [(59, 241, 92), (65, 255, 245), 'green'],
+            [(0, 241, 92), (8, 255, 245), 'red'],
+            [(27, 241, 92), (33, 255, 245), 'yellow']
+        ]
+
         # use normal topic and 'Image' data type instead of compressed
         self.subscriber_colour = rospy.Subscriber('/camera/rgb/image_raw', Image, self.callback_colour)
         self.subscriber_depth = rospy.Subscriber('/camera/depth/image_raw', Image, self.callback_depth)
@@ -27,8 +39,9 @@ class image_processing_node:
 
     def callback_colour(self, colour_image):
         rospy.loginfo('[Image Processing] callback_colour')
-        # from the lab:
-        # np_array = np.fromstring(colour_image.data, np.uint8)
+
+        colour_contours = []
+
         try:
             self.colour_frame = self.bridge.imgmsg_to_cv2(colour_image, "bgr8")
         except CvBridgeError as e:
@@ -37,24 +50,42 @@ class image_processing_node:
         blurred = cv2.GaussianBlur(self.colour_frame, (11, 11), 0)
         hsv = cv2.cvtColor(blurred, cv2.COLOR_BGR2HSV)
 
-        colour_lower = (16, 86, 112)
-        colour_upper = (43, 255, 255)
+        # b_min = (119, 241, 92)
+        # b_max = (122, 255, 201)
 
-        self.mask_frame = cv2.inRange(hsv, colour_lower, colour_upper)
-        self.mask_frame = cv2.erode(self.mask_frame, None, iterations=2)
-        self.mask_frame = cv2.dilate(self.mask_frame, None, iterations=2)
-        
-        contours = cv2.findContours(self.mask_frame.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        contours = imutils.grab_contours(contours)
-        
-        if len(contours) == 0:
-            return
-        largest_contour = max(contours, key=cv2.contourArea)
-        x, y, w, h = cv2.boundingRect(largest_contour)
-        self.colour_frame = cv2.rectangle(self.colour_frame, (x, y), (x+w, y+h), (0,0,255), 2)
+        # g_min = (59, 241, 92)
+        # g_max = (65, 255, 201)
+
+        # r_min = (0, 241, 92)
+        # r_max = (8, 255, 201)
+
+        # y_min = (27, 241, 92)
+        # y_max = (33, 255, 201)
+
+        for limit in self.ranges:
+            local_mask = cv2.inRange(hsv, limit[0], limit[1])
+            local_mask = cv2.erode(local_mask, None, iterations=2)
+            local_mask = cv2.dilate(local_mask, None, iterations=2)
             
-        # from the lab:
-        # self.colour_frame = cv2.imdecode(np_array, cv2.IMREAD_COLOR)
+            contours = cv2.findContours(local_mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            contours = imutils.grab_contours(contours)
+
+            if len(contours) != 0:
+                largest_contour = max(contours, key=cv2.contourArea)
+                x, y, w, h = cv2.boundingRect(largest_contour)
+                colour_contours.append([largest_contour, y, limit[2]])
+                
+        colour_contours.sort(key=lambda x:x[1])
+
+        colour_masks = self.colour_frame
+        for colour in colour_contours:
+            x, y, w, h = cv2.boundingRect(colour[0])
+            colour_masks = cv2.rectangle(colour_masks, (x, y), (x+w, y+h), (0,0,255), 2)
+
+        self.mask_frame = colour_masks
+        print 'Colours from the top: {}, {}'.format(colour_contours[0][2], colour_contours[1][2])
+        
+            
 
     def callback_depth(self, depth_image):
         rospy.loginfo('[Image Processing] callback_depth')
@@ -66,7 +97,7 @@ class image_processing_node:
     def loop(self):
         if self.colour_frame != None and self.depth_frame != None:
             cv2.imshow('Colour Image', self.colour_frame)
-            # cv2.imshow('Depth Image', self.depth_frame)
+            cv2.imshow('Depth Image', self.depth_frame)
             cv2.imshow('Masked Image', self.mask_frame)
             resp = cv2.waitKey(80)
             if resp == ord('c'):
