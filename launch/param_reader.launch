@@ -1,0 +1,5 @@
+<launch>
+    <node pkg="filip_package" type="param_reader.py" name="param_reader_node" output="screen">
+    <rosparam file="$(find practice_mazes)/param/beacons_0.yaml" command="load"/>
+    </node>
+</launch>
