@@ -12,8 +12,9 @@ import numpy as np
 import transformations as trans
 from sensor_msgs.msg import CompressedImage, Image, CameraInfo
 from nav_msgs.msg import Odometry
-from visualization_msgs import MarkerArray, Marker
-from geometry_msgs.msg import Quaternion
+from visualization_msgs.msg import MarkerArray, Marker
+from geometry_msgs.msg import Quaternion, Vector3, Pose, Point
+from std_msgs.msg import ColorRGBA
 from cv_bridge import CvBridge, CvBridgeError
 
 class image_processing_node:
@@ -26,10 +27,10 @@ class image_processing_node:
         self.num_depth_images = 0
 
         self.ranges = [
-            [(119, 241, 92), (122, 255, 245), 'blue', (0,0,255,255)],
-            [(59, 241, 92), (65, 255, 245), 'green', (0,255,0,255)],
-            [(0, 241, 92), (8, 255, 245), 'red', (255,0,0,255)],
-            [(27, 241, 92), (33, 255, 245), 'yellow', (127,127,0,255)]
+            [(119, 241, 92), (122, 255, 245), 'blue', (0,0,1,1)],
+            [(59, 241, 92), (65, 255, 245), 'green', (0,1,0,1)],
+            [(0, 241, 92), (8, 255, 245), 'red', (1,0,0,1)],
+            [(27, 241, 92), (33, 255, 245), 'yellow', (0.5,0.5,0,1)]
         ]
 
         self.K = None
@@ -44,7 +45,7 @@ class image_processing_node:
         self.subscriber_camera_info = rospy.Subscriber('camera/rgb/camera_info', CameraInfo, self.callback_camera_info)
         self.subscriber_odometry = rospy.Subscriber('odom', Odometry, self.callback_odometry)
 
-        # self.publisher_markers = rospy.Publisher(...)
+        self.publisher_markers = rospy.Publisher('/custom_markers', MarkerArray, queue_size=10)
 
         r = rospy.Rate(10)
         while not rospy.is_shutdown():
@@ -89,12 +90,18 @@ class image_processing_node:
                 largest_contour = max(contours, key=cv2.contourArea)
                 x, y, w, h = cv2.boundingRect(largest_contour)
 
+                # don't process contours close to the edge
+                if (x+w/2) < 100 or (x+w/2) > (1920-100):
+                    self.mask_frame = self.colour_frame
+                    return
+
                 # append the largest ('nearest') contour to the array
                 # along with it's Y coordinate, color name, and center point and RGBA color value
-                colour_contours.append([largest_contour, y, limit[2], (x+h/2, y+w/2)], limit[3])
+                colour_contours.append([largest_contour, y, limit[2], (x+w/2, y+h/2), limit[3]])
                 
-        # check if only one beacon is in front
+        # check if only one beacon (two contours) is in front
         if len(colour_contours) != 2:
+            self.mask_frame = self.colour_frame
             return
         # sort the contours array by the Y coordinate (top contour first)
         colour_contours.sort(key=lambda x:x[1])
@@ -117,7 +124,7 @@ class image_processing_node:
         # x, y of the top colour contour
         x, y = colour_contours[0][3]
 
-        depth = self.depth_frame[x, y]
+        depth = self.depth_frame[y, x]
         p_h = np.array([[x], [y], [1]])
         p3d = depth * np.matmul(np.linalg.inv(self.K), p_h)
         p3d_h = np.array([[p3d[2][0]], [-p3d[0][0]], [-p3d[1][0]], [1]])
@@ -126,12 +133,12 @@ class image_processing_node:
         p3d_w = np.array([[p3d_w_h[0][0]/p3d_w_h[3][0]], [p3d_w_h[1][0]/p3d_w_h[3][0]], [p3d_w_h[2][0]/p3d_w_h[3][0]]])
 
         marker = Marker()
-        # marker.header.seq= marker.id = 
+        marker.header.seq= marker.id = 1
         marker.header.frame_id = 'map'
         marker.header.stamp = rospy.Time.now()
         marker.pose = Pose(Point(p3d_w[0], p3d_w[1], 1), Quaternion(0.0, 1.0, 0.0, 1.0))
-        marker.scale = Vector3(2,2,2)
-        marker.color = ColorRGBA(colour_contours[0][4])
+        marker.scale = Vector3(0.2, 0.2, 0.2)
+        marker.color = ColorRGBA(*colour_contours[0][4])
 
         self.marker_array.markers.append(marker)
         self.publisher_markers.publish(self.marker_array)
